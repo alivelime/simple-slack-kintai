@@ -47,12 +47,22 @@ description: 2体のチームエージェントを並行起動し、それぞれ
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-### Step 2 — 2体を並行起動する (ここが本パターンの核)
+### Step 2 — チームを作って2体を並行起動する (ここが本パターンの核)
 
-**必ず1つのメッセージの中で Agent ツールを2回呼び出す** (並列実行)。直列で起動してはいけない。
+まず `TeamCreate` でレビュー用チームを作る (これにより SendMessage / 共有タスクリストが使える状態になる):
 
-- エージェント A: `name: "reviewer-alpha"`, `subagent_type: "general-purpose"`
-- エージェント B: `name: "reviewer-beta"`, `subagent_type: "general-purpose"`
+```
+TeamCreate({
+  team_name: "cross-review",
+  agent_type: "review-coordinator",
+  description: "クロスレビュー: 2体の独立レビュアーを合意形成させる"
+})
+```
+
+続けて **同じ1メッセージ内で Agent ツールを2回呼び出して並列起動する**。直列で起動してはいけない。両方に `team_name: "cross-review"` を渡してチームに参加させる。
+
+- エージェント A: `name: "reviewer-alpha"`, `subagent_type: "general-purpose"`, `team_name: "cross-review"`
+- エージェント B: `name: "reviewer-beta"`, `subagent_type: "general-purpose"`, `team_name: "cross-review"`
 
 両方に渡すプロンプト (相手の名前だけ差し替える):
 
@@ -157,7 +167,9 @@ description: 2体のチームエージェントを並行起動し、それぞれ
 
 ## 重要な方針
 
+- **必ず TeamCreate でチームを先に作ってから Agent を起動する**。`team_name` を渡すことで2体が同じチームに属し、SendMessage で名前指定の相互通信ができる
 - **2体の起動は並行で** (1メッセージで2 Agent 呼び出し)。直列だと「2体が同時に独立に見ている」演出が壊れる
 - **SendMessage の交換も並列で** (1メッセージで2 SendMessage)
 - エージェント同士は名前で相手を認識するが、合意の集約は **メインエージェントが最後にまとめる** のが責務分離として明確
 - 合意形成は 1ラウンド で打ち切る (YouTube尺に収めるため)。2ラウンド以上は triple-review 側で "発散" を演出するのでここでは不要
+- 終了時は両エージェントへ `SendMessage({to, message: {type: "shutdown_request"}})` を送って後片付けする
